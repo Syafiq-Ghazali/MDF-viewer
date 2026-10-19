@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="790" viewBox="0 0 1120 790" role="img" aria-labelledby="title desc">
+  <title id="title">MDF Waveform Viewer architecture</title>
+  <desc id="desc">The Qt GUI contains the main window, signal browser, workspace, and waveform panels. Queued signals send recording and channel requests to a single file worker thread. A data manager uses asammdf to discover metadata and lazily load numeric samples from MDF files. A bounded LRU cache shares immutable arrays between panels. Session-tagged results return to the GUI.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#6bc9f5"/></marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; fill: #e0e7ee; }
+      .title { font-size: 27px; font-weight: 700; }
+      .heading { font-size: 20px; font-weight: 600; }
+      .body { font-size: 16px; }
+      .small { font-size: 14px; fill: #b5c6d7; }
+      .box { fill: #23374a; stroke: #52728e; stroke-width: 1.5; rx: 10; }
+      .arrow { fill: none; stroke: #6bc9f5; stroke-width: 2; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1120" height="790" rx="16" fill="#101923"/>
+  <text x="36" y="48" class="title">MDF Waveform Viewer</text>
+  <text x="36" y="76" class="body">Dynamic channels · original timestamps · independent waveform panels</text>
+  <rect x="26" y="104" width="1068" height="310" rx="12" fill="#182b3b" stroke="#3b7698"/>
+  <text x="48" y="136" class="heading">GUI thread · PySide6 + PyQtGraph</text>
+  <rect x="346" y="154" width="428" height="70" class="box"/>
+  <text x="370" y="183" class="heading">Main Window</text>
+  <text x="370" y="207" class="body">Toolbar, file sessions, loading, warnings</text>
+  <rect x="48" y="270" width="282" height="116" class="box"/>
+  <text x="68" y="301" class="heading">Signal Browser</text>
+  <text x="68" y="329" class="body">Metadata model + search</text>
+  <text x="68" y="355" class="small">Identity: (group index, channel index)</text>
+  <rect x="394" y="270" width="282" height="116" class="box"/>
+  <text x="414" y="301" class="heading">Waveform Workspace</text>
+  <text x="414" y="329" class="body">Panel selection, order, resizing</text>
+  <text x="414" y="355" class="small">Guarded time-axis synchronization</text>
+  <rect x="742" y="270" width="330" height="116" class="box"/>
+  <text x="762" y="301" class="heading">Waveform Panels × N</text>
+  <text x="762" y="329" class="body">Curves, legends, visibility, fitting</text>
+  <text x="762" y="355" class="small">Nearest recorded-sample readouts</text>
+  <path d="M410 224 L190 254 L190 268" class="arrow"/>
+  <path d="M535 224 L535 268" class="arrow"/>
+  <path d="M330 329 L392 329" class="arrow"/>
+  <path d="M676 329 L740 329" class="arrow"/>
+  <text x="216" y="459" class="body">Queued open / load requests</text>
+  <path d="M190 415 L190 494" class="arrow"/>
+  <text x="600" y="459" class="body">Session-tagged metadata / shared arrays</text>
+  <path d="M948 494 L948 416" class="arrow"/>
+  <rect x="26" y="498" width="1068" height="214" rx="12" fill="#192f30" stroke="#52928a"/>
+  <text x="48" y="532" class="heading">File worker thread · serialized parser operations</text>
+  <rect x="48" y="555" width="235" height="125" class="box"/>
+  <text x="68" y="588" class="heading">File Worker</text>
+  <text x="68" y="619" class="body">Open / load / close</text>
+  <text x="68" y="648" class="small">Session and error signals</text>
+  <rect x="345" y="555" width="341" height="125" class="box"/>
+  <text x="365" y="588" class="heading">MDF Data Manager</text>
+  <text x="365" y="619" class="body">asammdf · lazy numeric reads</text>
+  <text x="365" y="648" class="small">Metadata, invalidity, file ownership</text>
+  <rect x="750" y="555" width="322" height="125" class="box"/>
+  <text x="770" y="588" class="heading">Bounded LRU Cache</text>
+  <text x="770" y="619" class="body">256 MiB of retained arrays</text>
+  <text x="770" y="648" class="small">Immutable data shared across panels</text>
+  <path d="M283 616 L343 616" class="arrow"/>
+  <path d="M686 616 L748 616" class="arrow"/>
+  <path d="M515 714 L515 750" class="arrow"/>
+  <text x="544" y="755" class="heading">MDF recordings (.mf4 / .mdf / .dat)</text>
+  <text x="48" y="755" class="small">Samples decoded on demand</text>
+</svg>
