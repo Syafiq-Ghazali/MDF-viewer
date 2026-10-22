@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from .data import ChannelInfo, ChannelKey
+from .drag import ChannelMimeData
 
 
 class ChannelModel(QAbstractTableModel):
@@ -22,6 +23,20 @@ class ChannelModel(QAbstractTableModel):
 
     def columnCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self.headers)
+
+    def flags(self, index):
+        flags = super().flags(index)
+        return flags | Qt.ItemFlag.ItemIsDragEnabled if index.isValid() else flags
+
+    def mimeTypes(self):
+        return [ChannelMimeData.mime_type]
+
+    def mimeData(self, indexes):
+        rows = sorted({index.row() for index in indexes if index.isValid()})
+        return ChannelMimeData(self, rows)
+
+    def supportedDragActions(self):
+        return Qt.DropAction.CopyAction
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
@@ -77,6 +92,9 @@ class SignalBrowser(QWidget):
         self.table.setModel(self.proxy)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.table.setDragEnabled(True)
+        self.table.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.table.setDefaultDropAction(Qt.DropAction.CopyAction)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().hide()
@@ -88,7 +106,7 @@ class SignalBrowser(QWidget):
         self.target.setWordWrap(True)
         self.add_button = QPushButton("Add selected signals to panel")
         self.add_button.setEnabled(False)
-        hint = QLabel("Select a panel, then double-click a signal or select several with Ctrl / Shift and click Add.")
+        hint = QLabel("Drag signals onto a waveform. Use Ctrl / Shift to select several, or select a panel and double-click a signal or click Add.")
         hint.setWordWrap(True)
         for widget in (heading, self.summary, self.search, self.table, self.target, self.add_button, hint):
             layout.addWidget(widget)

@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.progress)
         self.statusBar().showMessage("Open a recording, select a panel, then add signals from the browser.")
         self.browser.add_requested.connect(self.add_channels)
+        self.workspace.channels_dropped.connect(self._drop_channels)
         self.workspace.selection_changed.connect(self._target_changed)
         self.workspace.traces_changed.connect(self._update_usage)
         self.thread = QThread(self)
@@ -131,6 +132,17 @@ class MainWindow(QMainWindow):
         self._update_progress()
         if self.pending:
             self.statusBar().showMessage(f"Loading {len(self.pending)} channel(s)…")
+
+    @Slot(object, object)
+    def _drop_channels(self, panel, mime):
+        if self.opening or panel not in self.workspace.panels:
+            return
+        if mime.source_model is not self.browser.model:
+            return
+        keys = mime.keys()
+        if keys:
+            self.workspace.select(panel)
+            self.add_channels(keys)
 
     @Slot(int, object, object)
     def _loaded(self, session, key, data):

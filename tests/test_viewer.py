@@ -1,11 +1,13 @@
 import threading
 
 import numpy as np
-from PySide6.QtCore import QItemSelectionModel, QPoint, QTimer, Qt
-from PySide6.QtGui import QWheelEvent
+import pytest
+from PySide6.QtCore import QItemSelectionModel, QMimeData, QPoint, QPointF, QTimer, Qt
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QWheelEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from conftest import key_named
+from mdf_viewer.drag import ChannelMimeData
 
 
 def add(window, qtbot, names, panel=None):
@@ -15,6 +17,89 @@ def add(window, qtbot, names, panel=None):
     window.add_channels(keys)
     qtbot.waitUntil(lambda: not window.pending, timeout=10000)
     return keys
+
+
+def drag_selection(browser):
+    selection = browser.table.selectionModel()
+    for row in range(browser.proxy.rowCount()):
+        selection.select(
+            browser.proxy.index(row, 0),
+            QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows,
+        )
+    return browser.proxy.mimeData(selection.selectedIndexes())
+
+
+def drop_signals(target, mime):
+    position = target.rect().center()
+    args = (Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    enter = QDragEnterEvent(position, *args)
+    QApplication.sendEvent(target, enter)
+    if not enter.isAccepted():
+        return False
+    move = QDragMoveEvent(position, *args)
+    QApplication.sendEvent(target, move)
+    assert move.isAccepted()
+    drop = QDropEvent(QPointF(position), *args)
+    QApplication.sendEvent(target, drop)
+    return drop.isAccepted() and drop.dropAction() == Qt.DropAction.CopyAction
+
+
+@pytest.mark.parametrize("onto_plot", [True, False])
+def test_drag_filtered_selection_to_destination_panel(window, qtbot, onto_plot):
+    browser = window.browser
+    browser.search.setText("phase")
+    mime = drag_selection(browser)
+    keys = [channel.key for channel in browser.model.channels if "Phase" in channel.name]
+    assert set(mime.keys()) == set(keys)
+    assert len(mime.keys()) == 3  # Selected cells must not duplicate rows.
+    assert browser.table.dragEnabled()
+    assert browser.proxy.flags(browser.proxy.index(0, 0)) & Qt.ItemFlag.ItemIsDragEnabled
+    first = window.workspace.active
+    destination = window.workspace.add_panel()
+    window.workspace.select(first)
+    target = destination.plot.viewport() if onto_plot else destination
+    assert drop_signals(target, mime)
+    assert window.workspace.active is destination
+    # Changing the selection while data loads must not redirect the drop.
+    window.workspace.select(first)
+    qtbot.waitUntil(lambda: not window.pending, timeout=10000)
+    assert set(destination.traces) == set(keys)
+    assert not first.traces
+    assert drop_signals(target, mime)
+    assert not window.pending
+    assert len(destination.traces) == 3
+    assert len(destination.plot.plotItem.legend.items) == 3
+    assert all(browser.model.usage[key] == (1, 1) for key in keys)
+
+
+def test_drag_duplicate_names_preserves_channel_identity(window, qtbot, examples):
+    window.open_file(str(examples / "edge_cases.mf4"))
+    qtbot.waitUntil(lambda: not window.opening, timeout=10000)
+    window.browser.search.setText("Temperature")
+    mime = drag_selection(window.browser)
+    assert len(mime.keys()) == 2
+    panel = window.workspace.active
+    assert drop_signals(panel.plot.viewport(), mime)
+    qtbot.waitUntil(lambda: not window.pending, timeout=10000)
+    assert set(panel.traces) == set(mime.keys())
+    assert {trace.data.info.unit for trace in panel.traces.values()} == {"degC", "K"}
+
+
+def test_drop_rejects_unrelated_disabled_and_stale_channels(window, qtbot, examples):
+    panel = window.workspace.active
+    unrelated = QMimeData()
+    unrelated.setText("DC Bus Voltage")
+    unrelated.setData(ChannelMimeData.mime_type, b"not an internal channel drag")
+    assert not drop_signals(panel.plot.viewport(), unrelated)
+    window.browser.search.setText("DC Bus Voltage")
+    mime = drag_selection(window.browser)
+    assert len(mime.keys()) == 1
+    window.open_file(str(examples / "edge_cases.mf4"))
+    assert not drop_signals(panel.plot.viewport(), mime)
+    qtbot.waitUntil(lambda: not window.opening, timeout=10000)
+    assert not drop_signals(window.workspace.active.plot.viewport(), mime)
+    assert not window.pending
+    assert not window.workspace.active.traces
 
 
 def test_search_multiadd_hide_remove_and_reorder(window, qtbot):
@@ -76,7 +161,7 @@ def test_sync_independent_navigation_and_fit(window, qtbot):
 
 def test_mouse_wheel_zoom_and_drag_pan(window, qtbot):
     panel = window.workspace.active
-    add(window, qtbot, ["DC Bus Voltage"])
+    keys = add(window, qtbot, ["DC Bus Voltage", "Duty Cycle"])
     qtbot.wait(50)
     viewport = panel.plot.viewport()
     center = panel.plot.mapFromScene(panel.plot.getViewBox().sceneBoundingRect().center())
@@ -93,6 +178,7 @@ def test_mouse_wheel_zoom_and_drag_pan(window, qtbot):
     qtbot.mouseMove(viewport, center + QPoint(100, 0), delay=30)
     qtbot.mouseRelease(viewport, Qt.MouseButton.LeftButton, pos=center + QPoint(100, 0))
     assert not np.allclose(panel.plot.viewRange()[0], zoomed)
+    np.testing.assert_allclose(panel.traces[keys[1]].view.viewRange()[0], panel.plot.viewRange()[0])
 
 
 def test_switch_file_duplicate_names_invalid_readout_and_empty(window, qtbot, examples):
@@ -233,3 +319,64 @@ def test_fit_y_excludes_samples_outside_time_window(window, qtbot, examples):
     low, high = panel.plot.viewRange()[1]
     assert low < 21 < high
     assert high < 22
+
+
+@pytest.mark.parametrize("second_name", ["Temperature", "Sensor Voltage"])
+def test_edge_case_signals_keep_visible_amplitude_and_linked_time(window, qtbot, examples, second_name):
+    window.open_file(str(examples / "edge_cases.mf4"))
+    qtbot.waitUntil(lambda: not window.opening, timeout=10000)
+    temperatures = [channel.key for channel in window.browser.model.channels if channel.name == "Temperature"]
+    first = temperatures[0]
+    second = temperatures[1] if second_name == "Temperature" else key_named(window, second_name)
+    panel = window.workspace.active
+    window.add_channels([first, second])
+    qtbot.waitUntil(lambda: not window.pending, timeout=10000)
+    panel.fit_all()
+    qtbot.wait(30)
+    assert panel.separate_y.isChecked()
+    assert panel.traces[first].view is not panel.traces[second].view
+    for trace in panel.traces.values():
+        values = trace.data.samples[np.isfinite(trace.data.samples)]
+        low, high = trace.view.viewRange()[1]
+        assert low <= values.min() <= values.max() <= high
+        assert np.ptp(values) / (high - low) > 0.5
+        # Scaling changes only the view; plotting and readouts use raw values.
+        np.testing.assert_array_equal(trace.curve.yData, trace.data.samples)
+    panel.plot.setXRange(.2, 1.5, padding=0)
+    qtbot.wait(30)
+    np.testing.assert_allclose(panel.traces[second].view.viewRange()[0], panel.plot.viewRange()[0])
+    window.resize(1650, 1000)
+    qtbot.wait(30)
+    np.testing.assert_allclose(panel.traces[second].view.viewRange()[0], panel.plot.viewRange()[0])
+    qtbot.mouseClick(panel.separate_y, Qt.MouseButton.LeftButton)
+    assert panel.traces[first].view is panel.traces[second].view
+    assert not panel._extra_views
+    qtbot.mouseClick(panel.separate_y, Qt.MouseButton.LeftButton)
+    assert panel.traces[first].view is not panel.traces[second].view
+    assert len(panel._extra_views) == 1
+
+
+def test_signal_sidebar_readouts_and_remove_button(window, qtbot):
+    panel = window.workspace.active
+    first, second = add(window, qtbot, ["DC Bus Voltage", "Duty Cycle"])
+    qtbot.wait(30)
+    assert panel.readout.mapTo(panel, QPoint()).x() > panel.plot.mapTo(panel, QPoint()).x()
+    panel.inspect_at(.5)
+    row = panel.traces[first].row
+    assert "DC Bus Voltage" in row.text(0)
+    assert row.text(2) in row.text(0)
+    assert "0.5 s" in row.text(0)
+    remove = panel.readout.itemWidget(row, 4)
+    assert remove.isVisible()
+    assert panel.readout.viewport().rect().contains(remove.geometry())
+    qtbot.mouseClick(remove, Qt.MouseButton.LeftButton)
+    assert set(panel.traces) == {second}
+    assert panel.readout.topLevelItemCount() == 1
+    assert panel.traces[second].view is panel.plot.getViewBox()
+    assert not panel._extra_views
+    assert len(panel.plot.plotItem.legend.items) == 1
+    assert first not in window.browser.model.usage
+    assert window.browser.model.usage[second] == (1, 1)
+    values = panel.traces[second].data.samples
+    low, high = panel.plot.viewRange()[1]
+    assert np.ptp(values) / (high - low) > 0.5

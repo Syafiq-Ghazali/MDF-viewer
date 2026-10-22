@@ -64,17 +64,23 @@ Equivalent direct build command:
 3. Select a panel using **Select** or by clicking its plot. A blue border and
    the browser's **Target** label identify the destination. Double-click a
    signal, or select several using Ctrl/Shift and click **Add selected signals
-   to panel**. Samples load only when requested.
+   to panel**. You can also drag one or more selected signals directly onto any
+   waveform; the destination panel becomes selected. Samples load only when requested.
 4. Use **Add waveform panel** (`Ctrl+N`) as needed. Rename panels in their
    headers, reorder them with the arrows, drag the divider between panels to
    resize, and scroll to reach panels below the window.
-5. Each signal has a color, a legend entry, a visibility checkbox, and its own
-   **Remove** button. Removing a panel leaves the other panels intact. If all
+5. The list beside each waveform shows its signals, colors, recorded values,
+   and sample times. Use a signal's checkbox to hide it or its **×** button to
+   remove it. Hover over the name for its description and data status.
+   Removing a panel leaves the other panels intact. If all
    panels are removed, adding a signal creates a new panel.
 6. Use the mouse wheel to zoom and left-drag to pan. Drag or scroll over an
    axis to change that axis alone. Time axes synchronize by default; uncheck
    **Synchronize time axes** to navigate panels independently. Y ranges remain
-   independent and signals in each panel share one Y-axis.
+   independent. **Separate Y scales** is enabled by default: each signal has
+   its own colored axis, so different units or magnitudes do not flatten other
+   traces. Uncheck it to compare signals on one shared Y-axis. Original values
+   and units are retained in either mode.
 7. **Fit time + Y** resets a panel's range; **Fit all panels** (`Ctrl+0`) fits
    the full time span across panels. **Auto Y** follows the visible data;
    manual vertical navigation disables it. **Fit Y to visible time** fits the
@@ -171,9 +177,9 @@ checked before relying on this viewer in a debugging workflow.
 
 - Phase 1 plots scalar real numeric channels. Text, structures, arrays, and
   text-valued conversions produce a warning. No DSP, live streaming, derived
-  signals, layout persistence, export, dual cursors, or per-signal Y-axes.
-- Units are shown in legends/readouts and on the shared Y-axis; values are not
-  converted to common units. Choose compatible signals for each panel.
+  signals, layout persistence, export, or dual cursors.
+- Units are shown in legends/readouts and on the colored Y-axes; values are not
+  converted to common units. Choose compatible signals when using a shared Y-axis.
 - Each requested channel is decoded in full. Cache limits exclude displayed
   arrays and parser memory, so many large visible channels can consume
   substantial RAM. Initial plotting and explicit fits still run on the GUI

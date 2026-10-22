@@ -9,6 +9,7 @@ from .panel import WaveformPanel
 class WaveformWorkspace(QWidget):
     selection_changed = Signal(object)
     traces_changed = Signal()
+    channels_dropped = Signal(object, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,6 +38,7 @@ class WaveformWorkspace(QWidget):
         panel.remove_requested.connect(self.remove_panel)
         panel.move_requested.connect(self.move_panel)
         panel.traces_changed.connect(self.traces_changed)
+        panel.channels_dropped.connect(self.channels_dropped)
         panel.renamed.connect(lambda: self.selection_changed.emit(self.active))
         panel.plot.getViewBox().sigXRangeChanged.connect(
             lambda _view, limits, source=panel: self._sync_from(source, limits)
